@@ -1,0 +1,1693 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fleet Noon Report</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#04080f;--surf:#071018;--card:#0a1622;--b:#162438;
+  --blue:#2979ff;--cyan:#00e5ff;--green:#00e676;--amber:#ffab00;
+  --red:#ff1744;--text:#ecf0f8;--muted:#4a6680;--gold:#ffd740;
+  --purple:#d500f9;
+  --sea:#2979ff;--port:#00e676;--anc:#ffab00;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:100%;overflow-x:hidden;}
+
+/* ── HEADER ── */
+.hdr{
+  background:linear-gradient(180deg,#0c1d35 0%,var(--bg) 100%);
+  border-bottom:1px solid var(--b);padding:10px 14px;
+  position:sticky;top:0;z-index:600;
+}
+.hdr-inner{display:flex;align-items:center;justify-content:space-between;}
+.brand{display:flex;align-items:center;gap:9px;}
+.brand-ico{font-size:22px;}
+.brand-t{font-size:14px;font-weight:800;letter-spacing:.4px;}
+.brand-s{font-size:10px;color:var(--muted);}
+.hdr-r{display:flex;align-items:center;gap:8px;}
+.dbadge{background:var(--blue);color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;}
+
+/* ── SEGMENT TABS (top) ── */
+.seg-bar{display:flex;background:var(--surf);border-bottom:1px solid var(--b);overflow-x:auto;flex-shrink:0;}
+.seg-bar::-webkit-scrollbar{display:none;}
+.seg-btn{
+  padding:10px 16px;font-size:12px;font-weight:600;
+  border:none;background:transparent;color:var(--muted);cursor:pointer;
+  white-space:nowrap;border-bottom:2px solid transparent;transition:all .2s;flex-shrink:0;
+}
+.seg-btn.active{color:var(--text);border-bottom-color:var(--blue);}
+.seg-btn.map-seg.active{color:var(--cyan);border-bottom-color:var(--cyan);}
+
+/* ── FLEET GRID ── */
+.fleet-wrap{padding:8px 8px 16px;}
+.fleet-grid{display:flex;flex-direction:column;gap:8px;}
+.ship-col{width:100%;display:flex;flex-direction:column;gap:6px;}
+@media(min-width:960px){
+  .fleet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-items:start;}
+  .ship-col{width:auto;}
+}
+
+/* ── UPLOAD SLOT ── */
+.upload-slot{
+  border:2px dashed var(--b);border-radius:14px;padding:24px 16px;
+  text-align:center;cursor:pointer;transition:border-color .2s,background .2s;
+  background:var(--surf);
+}
+.upload-slot:hover,.upload-slot.drag{border-color:var(--blue);background:#1a2e4833;}
+.upload-slot input{display:none;}
+.up-icon{font-size:32px;margin-bottom:8px;}
+.up-title{font-size:13px;font-weight:700;margin-bottom:4px;}
+.up-sub{font-size:11px;color:var(--muted);}
+.up-types{display:flex;gap:6px;justify-content:center;margin-top:10px;flex-wrap:wrap;}
+.up-type{background:var(--card);border:1px solid var(--b);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--muted);}
+
+/* ── BLOCK ── */
+.blk{background:var(--card);border-radius:10px;padding:9px 11px;border:1px solid var(--b);}
+.blk-sm{background:var(--surf);border-radius:8px;padding:9px 11px;border:1px solid var(--b);}
+
+/* ── VESSEL TOP ── */
+.vc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;}
+.vc-name{font-size:14px;font-weight:800;}
+.vc-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+.pill{padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;}
+.p-sea{background:#2979ff22;color:#82b1ff;border:1px solid #2979ff88;}
+.p-port{background:#00e67622;color:#69f0ae;border:1px solid #00e67688;}
+.p-anc{background:#ffab0022;color:#ffd740;border:1px solid #ffab0088;}
+.p-dock{background:#3b0764cc;color:#d8b4fe;border:1px solid #a78bfa66;}
+
+/* ── ETA BOX ── */
+.eta-box{border-radius:9px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;}
+.eta-blue{background:linear-gradient(135deg,#0a1f4a,#040e2a);border:1px solid #2979ff55;}
+.eta-green{background:linear-gradient(135deg,#003820,#001a0e);border:1px solid #00e67655;}
+.eta-amber{background:linear-gradient(135deg,#3d2000,#1a0e00);border:1px solid #ffab0055;}
+.eta-purple{background:linear-gradient(135deg,#2e1065,#1a0040);border:1px solid #7c3aed55;}
+.eta-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;}
+.eta-date{font-size:14px;font-weight:700;margin-top:2px;}
+.eta-port{font-size:11px;color:var(--cyan);margin-top:2px;}
+.days-big{font-size:26px;font-weight:900;line-height:1;}
+.days-lbl{font-size:9px;color:var(--muted);margin-top:1px;}
+
+/* ── INFO GRID ── */
+.ig{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.ic{background:var(--surf);border-radius:7px;padding:6px 8px;border:1px solid var(--b);}
+.ic-l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px;}
+.ic-v{font-size:11px;font-weight:600;}
+.full{grid-column:1/-1;}
+
+/* ── PROGRESS BARS ── */
+.vp-hdr{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:4px;}
+.bar-track{height:9px;background:#1a2e48;border-radius:5px;overflow:visible;position:relative;}
+.bar-fill{height:100%;border-radius:5px;}
+.bar-ship{position:absolute;top:-5px;font-size:13px;transform:translateX(-50%);}
+.bf-route{background:linear-gradient(90deg,#2979ff,#00e5ff);}
+.bf-cargo{background:linear-gradient(90deg,#ff6d00,#ffd740);}
+.cargo-pct{font-size:22px;font-weight:800;color:var(--gold);line-height:1;}
+
+/* ── BUNKER BARS ── */
+.brow{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+.blbl{font-size:10px;color:var(--muted);width:38px;flex-shrink:0;}
+.btr{flex:1;height:7px;background:#1a2e48;border-radius:4px;overflow:hidden;}
+.bfi{height:100%;border-radius:4px;}
+.bf-fo{background:linear-gradient(90deg,#2979ff,#00e5ff);}
+.bf-do{background:linear-gradient(90deg,#00e676,#69f0ae);}
+.bval{font-size:10px;font-weight:600;width:62px;text-align:right;}
+
+/* ── SEC TITLE ── */
+.st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);display:flex;align-items:center;gap:6px;}
+.st::after{content:'';flex:1;height:1px;background:var(--b);}
+
+/* ── TABLE ── */
+.tscroll{overflow-x:auto;border-radius:8px;border:1px solid var(--b);}
+.dt{width:100%;border-collapse:collapse;font-size:11px;min-width:280px;}
+.dt th{background:#1a2e48;color:var(--muted);font-size:9px;text-transform:uppercase;padding:5px 6px;text-align:center;border-bottom:1px solid var(--b);}
+.dt td{padding:6px;text-align:center;border-bottom:1px solid #1a2e48;}
+.dt tr:last-child td{border-bottom:none;}
+.dt tr.td td{background:#1e3a5f2a!important;}
+.dt tr.td td:first-child{border-left:3px solid var(--blue);}
+.wb{display:inline-block;background:#1a2e48;border-radius:3px;padding:1px 4px;font-size:10px;}
+
+/* ── TIMELINE ── */
+.tl{background:#111f33;border-radius:8px;padding:9px 11px;border:1px solid var(--b);}
+.tl-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--b);}
+.tl-row:last-child{border-bottom:none;}
+.tl-l{font-size:11px;color:var(--muted);}
+.tl-v{font-size:11px;font-weight:600;}
+
+/* ── REMARK ── */
+.rem{background:var(--surf);border-radius:7px;padding:8px 10px;border-left:3px solid var(--blue);margin-bottom:5px;font-size:11px;color:#94a3b8;}
+.rem-d{font-size:9px;color:var(--blue);font-weight:700;margin-bottom:2px;}
+
+/* ── SHIP MINI MAP ── */
+.mini-map{height:155px;border-radius:9px;border:1px solid var(--b);overflow:hidden;}
+
+/* ── REMOVE BTN ── */
+
+
+/* ── FLEET MAP PANEL ── */
+#fleetMapPanel{display:none;padding:8px 10px;height:calc(100vh - 90px);flex-direction:column;}
+#fleetMapPanel.active{display:flex;}
+#fleetMap{
+  flex:1;min-height:0;
+  border-radius:10px;
+  border:1px solid var(--b);
+  overflow:hidden;
+}
+#fleetMap.fullscreen{
+  position:fixed;inset:0;z-index:2000;border-radius:0;border:none;
+}
+.fleet-legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;}
+.leg-dot{width:10px;height:10px;border-radius:50%;}
+
+/* ── FLEET PANEL ── */
+#fleetPanel{display:none;padding:0;}
+#fleetPanel.active{display:block;}
+
+}
+
+/* ── TREND CHART ── */
+.trend-wrap{background:var(--card);border-radius:10px;padding:10px 12px;border:1px solid var(--b);}
+.trend-wrap canvas{display:block;width:100%!important;}
+.trend-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.tl-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;}
+.trend-legend span{font-size:10px;color:var(--muted);}
+
+/* ── STALE WARNING ── */
+.stale-banner{background:#451a0388;border:1px solid #f59e0b66;border-radius:8px;padding:8px 12px;
+  display:flex;align-items:center;gap:8px;font-size:11px;color:#fcd34d;}
+.stale-dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;flex-shrink:0;
+  animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.fresh-dot{display:inline-block;width:7px;height:7px;border-radius:50%;
+  background:#10b981;margin-right:4px;vertical-align:middle;}
+.age-tag{font-size:9px;color:var(--muted);margin-left:4px;}
+
+/* ── LAYER BUTTONS ── */
+.layer-btn{
+  background:var(--surf);border:1px solid var(--b);color:var(--muted);
+  border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer;
+  transition:all .15s;
+}
+.layer-btn:hover{background:var(--card);color:var(--text);}
+.layer-btn.active{background:#2979ff22;border-color:#2979ff88;color:#82b1ff;font-weight:700;}
+
+/* ── ICON BUTTONS ── */
+.icon-btn{background:var(--surf);border:1px solid var(--b);color:var(--text);border-radius:8px;padding:5px 9px;font-size:14px;cursor:pointer;transition:background .15s;}
+.icon-btn:hover{background:var(--card);}
+.print-btn{display:none;}
+
+/* ── LIGHT THEME ── */
+body.light{
+  --bg:#f0f4f8;--surf:#e2e8f0;--card:#fff;--b:#cbd5e1;
+  --text:#1e293b;--muted:#64748b;
+}
+body.light .hdr{background:linear-gradient(180deg,#dde6f0,#f0f4f8);}
+body.light .seg-bar{background:#e2e8f0;}
+body.light .dt th{background:#e2e8f0;}
+body.light .dt td{border-bottom-color:#e2e8f0;}
+body.light .tl{background:#e2e8f0;}
+body.light .blk,.light .ic,.light .trend-wrap{border-color:#cbd5e1;}
+
+/* ── PRINT A4 PORTRAIT ── */
+@media print {
+  @page{size:A4 portrait;margin:8mm 10mm;}
+  .hdr,.seg-bar,#fleetMapPanel,#fileInput{display:none!important;}
+  #fleetPanel{display:block!important;}
+  .fleet-wrap{padding:0!important;overflow:visible!important;}
+  .fleet-grid{display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:6px!important;}
+  .ship-col{break-inside:avoid;}
+  html,body{background:#fff!important;color:#000!important;}
+  .blk,.ic,.tl,.rem,.trend-wrap,.btr,.bar-track,.eta-box,.eta-blue,.eta-green,.eta-amber{background:#f5f7fa!important;border-color:#ccd0d9!important;color:#111!important;}
+  .vc-name,.ic-v,.tl-v,.eta-date,.days-big{color:#000!important;}
+  .ic-l,.eta-lbl,.blbl,.vp-hdr,.vc-sub,.rem-d,.days-lbl,.st{color:#555!important;}
+  .st::after{background:#ccd0d9!important;}
+  .dt th{background:#e8ecf1!important;color:#444!important;}
+  .dt td{color:#111!important;border-bottom-color:#e0e4ea!important;}
+  .dt tr.td td{background:#eef2ff!important;}
+  .pill,.wb{border-color:#999!important;}
+  .p-sea{background:#dbeafe!important;color:#1d4ed8!important;}
+  .p-port{background:#d1fae5!important;color:#065f46!important;}
+  .p-anc{background:#fef3c7!important;color:#92400e!important;}
+  .bar-fill,.bfi{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  canvas{max-height:90px!important;}
+  .mini-map{height:100px!important;}
+  body::before{content:"FLEET NOON REPORT · " attr(data-date);display:block;font-size:12pt;font-weight:800;text-align:center;padding:4px 0 8px;border-bottom:2pt solid #000;margin-bottom:8px;}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-inner">
+    <div class="brand">
+      <span class="brand-ico">⚓</span>
+      <div>
+        <div class="brand-t">FLEET NOON REPORT</div>
+        <div class="brand-s" id="hdrSub">— Gemi yükle veya mevcut filoya bak —</div>
+      </div>
+    </div>
+    <div class="hdr-r">
+      <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Gece/Gündüz">🌙</button>
+      <button class="icon-btn" onclick="doPrint()" title="Yazdır / PDF">🖨️</button>
+      <div class="dbadge" id="todayDate"></div>
+    </div>
+  </div>
+</div>
+
+<!-- SEGMENT TABS -->
+<div class="seg-bar" id="segBar">
+  <button class="seg-btn active" id="segFleet" onclick="showSeg('fleet')">🚢 Filo</button>
+  <button class="seg-btn map-seg" id="segMap" onclick="showSeg('map')">🗺️ Harita</button>
+</div>
+
+<!-- FLEET PANEL -->
+<div id="fleetPanel" class="active">
+  <div class="fleet-wrap">
+    <div class="fleet-grid" id="fleetGrid">
+      <!-- Ships rendered here -->
+      <!-- Add ship button -->
+
+    </div>
+  </div>
+</div>
+
+<!-- FLEET MAP PANEL -->
+<div id="fleetMapPanel">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+    <div class="fleet-legend" id="fleetLegend" style="margin-bottom:0">
+      <div style="font-size:11px;color:var(--muted);">Gemi yükle — konumlar haritada görünecek</div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;" id="layerBtns">
+      <button class="layer-btn active" onclick="setLayer('dark')">🌑 Koyu</button>
+      <button class="layer-btn" onclick="setLayer('sat')">🛰️ Uydu</button>
+      <button class="layer-btn" onclick="setLayer('osm')">🗺️ Harita</button>
+      <button class="layer-btn" onclick="setLayer('wind')">🌬️ Rüzgar</button>
+      <button class="layer-btn" onclick="setLayer('cloud')">☁️ Bulut</button>
+      <button class="layer-btn" onclick="setLayer('temp')">🌡️ Sıcaklık</button>
+    </div>
+  </div>
+  <div id="fleetMap"></div>
+</div>
+
+<!-- Hidden file input -->
+
+<script>
+
+// ─── TREND CHART ──────────────────────────────────────
+function makeChart(canvasId, labels, datasets, scales) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const tooltipBg = '#04080f';
+  new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: tooltipBg, borderColor: '#162438', borderWidth: 1,
+          titleColor: '#ecf0f8', bodyColor: '#94a3b8',
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              if (v === null || v === undefined) return null;
+              const ds = ctx.dataset;
+              return ' ' + ds.label + ': ' + (ds._fmt ? ds._fmt(v) : v.toFixed(2));
+            }
+          }
+        }
+      },
+      scales
+    }
+  });
+}
+
+function initTrendChart(ship) {
+  if (!ship.last3 || !ship.last3.length) return;
+
+  const labels = ship.last3.map(d => {
+    const m = String(d.date||'').match(/(\d{2})\.(\d{2})\.(\d{4})/);
+    return m ? m[1]+'.'+m[2] : String(d.date||'').slice(0,5);
+  });
+
+  const safeNum = (v, formula) => {
+    if (v === null || v === undefined) return null;
+    const s = String(v);
+    if (formula && s.includes('=')) return null;
+    const n = parseFloat(s);
+    return isNaN(n) ? null : n;
+  };
+
+  if (ship.type === 'sea') {
+    // ── Chart 1: Speed / RPM / Slip ──────────────────────
+    const speeds = ship.last3.map(d => safeNum(d.spd, true));
+    const rpms   = ship.last3.map(d => safeNum(d.rpm, true));
+    const slips  = ship.last3.map(d => safeNum(d.slip, true));
+
+    makeChart('trend-sea-perf-'+ship.id, labels, [
+      { label:'Hız (kts)',   data:speeds, borderColor:'#2979ff', backgroundColor:'#2979ff18', yAxisID:'ySpd', tension:.4, pointRadius:4, pointHoverRadius:6, borderWidth:2, fill:true, _fmt:v=>v.toFixed(2)+' kts' },
+      { label:'RPM',         data:rpms,   borderColor:'#00e5ff', backgroundColor:'transparent', yAxisID:'yRpm', tension:.4, pointRadius:4, pointHoverRadius:6, borderWidth:2, borderDash:[4,3], _fmt:v=>v.toFixed(0)+' rpm' },
+      { label:'Slip (%)',    data:slips,  borderColor:'#ffab00', backgroundColor:'transparent', yAxisID:'ySlip', tension:.4, pointRadius:4, pointHoverRadius:6, borderWidth:2, borderDash:[2,3], _fmt:v=>v.toFixed(1)+'%' },
+    ], {
+      x:    { ticks:{color:'#4a6680',font:{size:10}}, grid:{color:'#16243822'} },
+      ySpd: { type:'linear', position:'left',  ticks:{color:'#2979ff',font:{size:9},maxTicksLimit:5,callback:v=>v.toFixed(1)+'kt'}, grid:{color:'#16243833'} },
+      yRpm: { type:'linear', position:'right', ticks:{color:'#00e5ff',font:{size:9},maxTicksLimit:5,callback:v=>v.toFixed(0)+'rpm'}, grid:{drawOnChartArea:false} },
+      ySlip:{ type:'linear', position:'right', ticks:{color:'#ffab00',font:{size:9},maxTicksLimit:5,callback:v=>v.toFixed(1)+'%'},  grid:{drawOnChartArea:false}, offset:true }
+    });
+
+    // ── Chart 2: LSFO consumption + ROB ──────────────────
+    const lsfoCons = ship.last3.map(d => safeNum(d.lsfo, true));
+    const lsfoROB  = ship.last3.map(d => safeNum(d.robLsfo, true));
+
+    makeChart('trend-sea-lsfo-'+ship.id, labels, [
+      { label:'LSFO Tük. (mt)', data:lsfoCons, borderColor:'#2979ff', backgroundColor:'#2979ff18', yAxisID:'yCons', tension:.4, pointRadius:4, pointHoverRadius:6, borderWidth:2, fill:true, _fmt:v=>v.toFixed(2)+' mt' },
+      { label:'ROB LSFO (mt)',  data:lsfoROB,  borderColor:'#00e676', backgroundColor:'transparent', yAxisID:'yROB',  tension:.4, pointRadius:4, pointHoverRadius:6, borderWidth:2, _fmt:v=>v.toFixed(1)+' mt' },
+    ], {
+      x:    { ticks:{color:'#4a6680',font:{size:10}}, grid:{color:'#16243822'} },
+      yCons:{ type:'linear', position:'left',  ticks:{color:'#2979ff',font:{size:9},maxTicksLimit:5,callback:v=>v.toFixed(1)+'mt'}, grid:{color:'#16243833'} },
+      yROB: { type:'linear', position:'right', ticks:{color:'#00e676',font:{size:9},maxTicksLimit:5,callback:v=>v.toFixed(0)+'mt'}, grid:{drawOnChartArea:false} }
+    });
+
+    // ── Chart 3: CYL OIL consumption ─────────────────────
+    const cylCons = ship.last3.map(d => safeNum(d.cylCons, true));
+    const cylROB  = ship.last3.map(d => safeNum(d.cylROB,  true));
+
+    makeChart('trend-sea-cyl-'+ship.id, labels, [
+      { label:'Cyl Oil Tük. (lt/gün)', data:cylCons, borderColor:'#d500f9', backgroundColor:'#d500f918', yAxisID:'yCyl', tension:.4, pointRadius:4, pointHoverRadius:6, borderWidth:2, fill:true, _fmt:v=>v.toFixed(0)+' lt' },
+      { label:'Cyl Oil ROB (lt)',  data:cylROB,  borderColor:'#ff1744', backgroundColor:'transparent', yAxisID:'yCylROB', tension:.4, pointRadius:4, pointHoverRadius:6, borderWidth:2, borderDash:[4,3], _fmt:v=>v.toFixed(0)+' lt' },
+    ], {
+      x:      { ticks:{color:'#4a6680',font:{size:10}}, grid:{color:'#16243822'} },
+      yCyl:   { type:'linear', position:'left',  ticks:{color:'#d500f9',font:{size:9},maxTicksLimit:5,callback:v=>v.toFixed(0)+'lt'}, grid:{color:'#16243833'} },
+      yCylROB:{ type:'linear', position:'right', ticks:{color:'#ff1744',font:{size:9},maxTicksLimit:5,callback:v=>v.toFixed(0)+'lt'}, grid:{drawOnChartArea:false} }
+    });
+
+  } else {
+    // ── Port: LSFO consumption + ROB ─────────────────────
+    const lsfoCons = ship.last3.map(d => safeNum(d.lsfo, false));
+    const lsfoROB  = ship.last3.map(d => safeNum(d.robLsfo, false));
+
+    makeChart('trend-port-lsfo-'+ship.id, labels, [
+      { label:'Günlük LSFO (mt)', data:lsfoCons, borderColor:'#2979ff', backgroundColor:'#2979ff18', yAxisID:'yCons', tension:.4, pointRadius:4, pointHoverRadius:6, borderWidth:2, fill:true, _fmt:v=>v.toFixed(3)+' mt' },
+      { label:'ROB LSFO (mt)',    data:lsfoROB,  borderColor:'#00e676', backgroundColor:'transparent', yAxisID:'yROB',  tension:.4, pointRadius:4, pointHoverRadius:6, borderWidth:2, _fmt:v=>v.toFixed(1)+' mt' },
+    ], {
+      x:    { ticks:{color:'#4a6680',font:{size:10}}, grid:{color:'#16243822'} },
+      yCons:{ type:'linear', position:'left',  ticks:{color:'#2979ff',font:{size:9},maxTicksLimit:5,callback:v=>v.toFixed(1)+'mt'}, grid:{color:'#16243833'} },
+      yROB: { type:'linear', position:'right', ticks:{color:'#00e676',font:{size:9},maxTicksLimit:5,callback:v=>v.toFixed(0)+'mt'}, grid:{drawOnChartArea:false} }
+    });
+  }
+}
+
+// ─── SHIP MANAGEMENT ──────────────────────────────────
+// ─── State ───────────────────────────────────────────
+const ships = [];  // { id, name, type, data, lat, lng, color, mapInst }
+const COLORS = ['#3b82f6','#10b981','#f59e0b','#a78bfa','#ef4444','#06b6d4'];
+let fleetMap = null;
+let fleetMapInited = false;
+
+// ─── Date badge ──────────────────────────────────────
+const now = new Date();
+document.getElementById('todayDate').textContent =
+  now.toLocaleDateString('tr-TR',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase();
+
+// ─── Segment switch ───────────────────────────────────
+function showSeg(s) {
+  document.getElementById('fleetPanel').classList.toggle('active', s==='fleet');
+  document.getElementById('fleetMapPanel').classList.toggle('active', s==='map');
+  document.getElementById('segFleet').classList.toggle('active', s==='fleet');
+  document.getElementById('segMap').classList.toggle('active', s==='map');
+  if (s==='map') {
+    setTimeout(() => {
+      if (!fleetMapInited) initFleetMap();
+      else if (fleetMap) fleetMap.invalidateSize();
+    }, 80);
+  }
+}
+
+
+// ─── Parse Excel ──────────────────────────────────────
+function handleFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const ship = parseWorkbook(wb, file.name);
+      addShip(ship);
+    } catch(err) {
+      alert('Excel okunamadı: ' + err.message);
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+// ─── Workbook parser ──────────────────────────────────
+function parseWorkbook(wb, fname) {
+  const sheetNames = wb.SheetNames;
+  // Detect type
+  const hasNoon = sheetNames.some(s => s.toUpperCase().includes('NOON'));
+  const hasPort = sheetNames.some(s => s.toUpperCase().includes('PORT'));
+  let type = 'unknown';
+  let sheetName;
+  if (hasNoon) { type = 'sea'; sheetName = sheetNames.find(s=>s.toUpperCase().includes('NOON')); }
+  else if (hasPort) { type = 'port'; sheetName = sheetNames.find(s=>s.toUpperCase().includes('PORT')); }
+  else { sheetName = sheetNames[0]; type = 'port'; }
+
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+
+  if (type === 'sea') return parseSeaReport(rows, fname);
+  else return parsePortReport(rows, fname);
+}
+
+// ─── Sea Report Parser ────────────────────────────────
+function parseSeaReport(rows, fname) {
+  const find = (rows, key) => {
+    for (const r of rows) {
+      for (let i=0;i<r.length-1;i++) {
+        if (r[i] && String(r[i]).toUpperCase().includes(key.toUpperCase()))
+          return r[i+1] || r[i+2];
+      }
+    }
+    return null;
+  };
+
+  const name   = find(rows,'VESSEL') || fname.replace('.xlsx','').replace('.XLSX','');
+  const from   = find(rows,'FROM') || '—';
+  const to     = find(rows,'TO') || '—';
+  const voy    = find(rows,'VOY NO') || '—';
+  const cargo  = find(rows,'CARGO') || '—';
+  const cosp   = find(rows,'COSP TIME') || find(rows,'COSP') || '—';
+  const eta    = find(rows,'ETA') || find(rows,'ARRV') || '—';
+  const charterer = find(rows,'CHART') || '—';
+
+  // Find daily rows (header row has 'DAY', 'Date', etc.)
+  let hdrIdx = -1;
+  for (let i=0;i<rows.length;i++) {
+    const r = rows[i];
+    if (r && r.some(c=>c&&String(c).toUpperCase()==='DAY') &&
+        r.some(c=>c&&String(c).toLowerCase().includes('date'))) {
+      hdrIdx = i; break;
+    }
+  }
+  const dayRows = [];
+  if (hdrIdx > -1) {
+    for (let i=hdrIdx+3;i<Math.min(hdrIdx+20,rows.length);i++) {
+      const r = rows[i];
+      if (!r || !r[0] || String(r[0]).includes('=')) continue;
+      const dayNum = r[0]; const date = r[1]; const lat = r[2]; const lng = r[3];
+      const hrs = r[4]; const min = r[5]; const dist = r[6];
+      const dtg = r[7]; const spd = r[8]; const rpm = r[10]; const slip = r[11];
+      const lsfo = r[12]; const lsdo = r[14];
+      const robLsfo = r[16]; const robLsdo = r[18];
+      const wind = r[23] ? `${r[23]} ${r[24]||''}` : '—';
+      const etaPort = r[27];
+      const remarks = r[40] || r[41] || '';
+      if (dayNum && date) {
+        const cylCons = r[28]; const cylROB = r[29];
+        const sysCons = r[30];
+        dayRows.push({ dayNum, date, lat, lng, hrs, min, dist, dtg, spd, rpm, slip, lsfo, lsdo, robLsfo, robLsdo, wind, etaPort, remarks, cylCons, cylROB, sysCons });
+      }
+    }
+  }
+
+  // Last 3 days
+  const last3 = dayRows.slice(-7);
+  const latest = last3[last3.length-1] || {};
+
+  // Parse coordinates to decimal
+  const {latDec, lngDec} = parseCoords(latest.lat, latest.lng);
+
+  // Calc voyage progress
+  let distMade = 0;
+  dayRows.forEach(d => { if(d.dist && !String(d.dist).includes('=')) distMade += parseFloat(d.dist)||0; });
+  const startRob = (() => {
+    for (const r of rows) {
+      if (r && r[0] && String(r[0]).toUpperCase()==='COSP') {
+        const ri = r[16]; return parseFloat(ri)||0;
+      }
+    }
+    return 0;
+  })();
+  const dtg = latest.dtg ? (String(latest.dtg).includes('=')?null:parseFloat(latest.dtg)) : null;
+  const totalDist = dtg ? (distMade + dtg) : null;
+  const pct = totalDist ? Math.round(distMade/totalDist*100) : null;
+
+  // ETA calc days remaining
+  let daysLeft = null;
+  if (latest.etaPort) {
+    try {
+      const etaStr = String(latest.etaPort);
+      const match = etaStr.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+      if (match) {
+        const etaDate = new Date(`${match[3]}-${match[2]}-${match[1]}`);
+        daysLeft = ((etaDate - new Date())/86400000).toFixed(1);
+      }
+    } catch(e){}
+  }
+
+  return {
+    id: Date.now(), name: String(name).trim(), type:'sea',
+    from, to, voy, cargo, cosp, eta: latest.etaPort||eta, charterer,
+    distMade, totalDist, pct, daysLeft,
+    latDec, lngDec, posStr: `${latest.lat||'—'} / ${latest.lng||'—'}`,
+    speed: latest.spd, rpm: latest.rpm, slip: latest.slip,
+    robLsfo: latest.robLsfo, robLsdo: latest.robLsdo,
+    dtg, last3
+  };
+}
+
+// ─── Port Report Parser ───────────────────────────────
+function parsePortReport(rows, fname) {
+  const find = (rows, key) => {
+    for (const r of rows) {
+      for (let i=0;i<r.length-1;i++) {
+        if (r[i] && String(r[i]).toUpperCase().includes(key.toUpperCase())) {
+          for (let j=i+1;j<Math.min(i+4,r.length);j++) {
+            if (r[j] !== null && r[j] !== undefined && r[j] !== '') return r[j];
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  const name = find(rows,'VESSEL') || fname;
+  const port = find(rows,'ARRIVAL PORT') || find(rows,'PORT') || '—';
+  const voy  = find(rows,'VOY NO') || '—';
+  const cargo = find(rows,'CARGO TO BE') || find(rows,'CARGO') || '—';
+  const charterer = find(rows,'CHART') || '—';
+
+  // Parse operation timestamps
+  const ops = {};
+  const opKeys = ['EOSP','NOR TENDERED','ANCHR','ANCHOR UP','POB','ALL FAST','BERTHING','COMM LDNG','COMP LDNG','DLOSP','COSP'];
+  for (const r of rows) {
+    if (!r[0]) continue;
+    const k = String(r[0]).toUpperCase();
+    for (const op of opKeys) {
+      if (k.includes(op)) {
+        ops[op] = { date: r[2], time: r[3] };
+      }
+    }
+  }
+
+  // Determine sub-type: anchor, berthed, departed
+  let subType = 'port';
+  if (ops['ANCHR'] && ops['ANCHR'].date && !ops['ALL FAST']?.date && !ops['BERTHING']?.date) subType = 'anchor';
+  else if (ops['ALL FAST']?.date || ops['BERTHING']?.date) subType = 'berthed';
+  if (ops['COSP']?.date) subType = 'departed';
+  if (ops['ANCHR']?.date && (ops['ALL FAST']?.date || ops['BERTHING']?.date)) subType = 'berthed'; // anchored then berthed
+
+  // ROB at EOSP
+  let robLsfo = null, robLsdo = null;
+  for (const r of rows) {
+    if (r[0] && String(r[0]).toUpperCase().includes('EOSP')) {
+      robLsfo = r[5]; robLsdo = r[7]; break;
+    }
+  }
+  // Latest ROB from berthing
+  for (const r of rows) {
+    if (r[0] && (String(r[0]).toUpperCase().includes('ALL FAST') || String(r[0]).toUpperCase().includes('BERTH'))) {
+      if (r[5]) robLsfo = r[5];
+      if (r[7]) robLsdo = r[7];
+    }
+  }
+
+  // Draft
+  const draftF = find(rows,'F') || '—';
+  const draftA = find(rows,'A') || '—';
+
+  // Daily port/anchor rows
+  const dailyRows = [];
+  let dailyHdr = -1;
+  for (let i=0;i<rows.length;i++) {
+    const r=rows[i];
+    if (!r) continue;
+    const rs = r.map(c=>c?String(c).toUpperCase():'');
+    if ((rs.includes('DATE') || rs.includes('8.DAILY PORT') || rs.includes('7.DAILY ANCHORAGE')) &&
+        rs.some(c=>c.includes('LSFO'))) {
+      dailyHdr = i; break;
+    }
+    if (r[0] && (String(r[0]).toUpperCase().includes('8.DAILY') || String(r[0]).toUpperCase().includes('7.DAILY'))) {
+      dailyHdr = i; break;
+    }
+  }
+  if (dailyHdr > -1) {
+    for (let i=dailyHdr+2;i<Math.min(dailyHdr+30,rows.length);i++) {
+      const r=rows[i];
+      if (!r||!r[1]) continue;
+      const dateStr = String(r[1]);
+      if (!dateStr.match(/\d{2}\.\d{2}\.\d{4}/)) continue;
+      dailyRows.push({
+        date: dateStr, daily: r[2], total: r[3], ets: r[4],
+        lsfo: r[5], lsdo: r[7], robLsfo: r[10], robLsdo: r[12], fw: r[9]
+      });
+    }
+  }
+
+  const latest = dailyRows[dailyRows.length-1]||{};
+  const last3 = dailyRows.slice(-7);
+  if (latest.robLsfo) robLsfo = latest.robLsfo;
+  if (latest.robLsdo) robLsdo = latest.robLsdo;
+
+  // Cargo progress
+  let cargoTotal = null, cargoDone = null, cargoPct = null;
+  for (const r of rows) {
+    if (r[2] && String(r[2]).includes(',')) {
+      const n = parseFloat(String(r[2]).replace(/,/g,''));
+      if (!isNaN(n) && n > 1000) { cargoTotal = n; break; }
+    }
+  }
+  if (latest.total) {
+    const n = parseFloat(String(latest.total).replace(/,/g,''));
+    if (!isNaN(n)) cargoDone = n;
+  }
+  if (cargoTotal && cargoDone) cargoPct = Math.round(cargoDone/cargoTotal*100);
+
+  // Anchor days
+  let anchorDays = null;
+  if (ops['ANCHR']?.date) {
+    try {
+      const dm = String(ops['ANCHR'].date).match(/(\d{2})\.(\d{2})\.(\d{4})/);
+      if (dm) {
+        const start = new Date(`${dm[3]}-${dm[2]}-${dm[1]}`);
+        const end = ops['ANCHOR UP']?.date ?
+          (m => m ? new Date(`${m[3]}-${m[2]}-${m[1]}`) : new Date())(String(ops['ANCHOR UP'].date).match(/(\d{2})\.(\d{2})\.(\d{4})/))
+          : new Date();
+        anchorDays = Math.round((end-start)/86400000);
+      }
+    }catch(e){}
+  }
+
+  // ETS days left
+  let daysLeft = null;
+  if (latest.ets && String(latest.ets).match(/\d{2}\.\d{2}\.\d{4}/)) {
+    try {
+      const m = String(latest.ets).match(/(\d{2})\.(\d{2})\.(\d{4})/);
+      const d = new Date(`${m[3]}-${m[2]}-${m[1]}`);
+      daysLeft = Math.max(0, ((d-new Date())/86400000)).toFixed(1);
+    }catch(e){}
+  }
+
+  // Position: use port coords (rough lookup)
+  const {latDec, lngDec} = getPortCoords(port);
+
+  return {
+    id: Date.now(), name: String(name).trim(), type:'port', subType,
+    port, voy, cargo, charterer, ops,
+    robLsfo, robLsdo, draftF, draftA,
+    cargoTotal, cargoDone, cargoPct,
+    anchorDays, daysLeft, ets: latest.ets,
+    latDec, lngDec, posStr: port,
+    last3
+  };
+}
+
+// ─── Coord helpers ────────────────────────────────────
+function parseCoords(latStr, lngStr) {
+  if (!latStr) return {latDec:0,lngDec:0};
+  try {
+    const latM = String(latStr).match(/(\d+)\s+(\d+\.?\d*)\s*([NS]?)/i);
+    const lngM = String(lngStr).match(/(\d+)\s+(\d+\.?\d*)\s*([EW]?)/i);
+    if (latM && lngM) {
+      let lat = parseInt(latM[1]) + parseFloat(latM[2])/60;
+      let lng = parseInt(lngM[1]) + parseFloat(lngM[2])/60;
+      if (latM[3].toUpperCase()==='S') lat=-lat;
+      if (lngM[3].toUpperCase()==='W') lng=-lng;
+      return {latDec:lat, lngDec:lng};
+    }
+  }catch(e){}
+  return {latDec:0, lngDec:0};
+}
+
+const PORT_COORDS = {
+  'SINGAPORE':{lat:1.29,lng:103.85}, 'COLOMBO':{lat:6.93,lng:79.85},
+  'IMBITUBA':{lat:-28.23,lng:-48.66},'BRAZIL':{lat:-15,lng:-47},
+  'KEMAMAN':{lat:4.24,lng:103.43},'MALAYSIA':{lat:3.14,lng:101.69},
+  'ROTTERDAM':{lat:51.90,lng:4.48},'HAMBURG':{lat:53.54,lng:9.99},
+  'CHINA':{lat:30.5,lng:121.5},'QINZHOU':{lat:21.9,lng:108.6},
+  'MUMBAI':{lat:18.96,lng:72.83},'DURBAN':{lat:-29.85,lng:31.03},
+  'PORT HEDLAND':{lat:-20.31,lng:118.57},'KAOHSIUNG':{lat:22.62,lng:120.27},
+  'BUSAN':{lat:35.10,lng:129.04},'SANTOS':{lat:-23.95,lng:-46.33},
+};
+function getPortCoords(portStr) {
+  if (!portStr) return {latDec:0,lngDec:0};
+  const up = String(portStr).toUpperCase();
+  for (const [k,v] of Object.entries(PORT_COORDS)) {
+    if (up.includes(k)) return {latDec:v.lat, lngDec:v.lng};
+  }
+  return {latDec:20, lngDec:60};
+}
+
+// ─── Add ship ─────────────────────────────────────────
+function addShip(ship) {
+  ship.color = COLORS[ships.length % COLORS.length];
+  ships.push(ship);
+  renderShip(ship);
+  updateHeader();
+  updateFleetMap();
+}
+
+function removeShip(id) {
+  const idx = ships.findIndex(s=>s.id===id);
+  if (idx===-1) return;
+  ships.splice(idx,1);
+  const el = document.getElementById('shipcol-'+id);
+  if (el) el.remove();
+  updateHeader();
+  updateFleetMap();
+}
+
+function updateHeader() {
+  // Auto-generated 29.03.2026 — do not edit
+  document.getElementById('hdrSub').textContent =
+    ships.length ? `${ships.length} Gemi — ${new Date().toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'})}` : '— Gemi yükle —';
+}
+
+// ─── Render ───────────────────────────────────────────
+function renderShip(ship) {
+  const grid = document.getElementById('fleetGrid');
+  const col = document.createElement('div');
+  col.className = 'ship-col';
+  col.id = 'shipcol-'+ship.id;
+  col.innerHTML = ship.type==='sea' ? renderSea(ship) : renderPort(ship);
+  grid.appendChild(col);
+
+  // Init mini map after render
+  setTimeout(() => {
+    const mapEl = document.getElementById('minimap-'+ship.id);
+    if (mapEl && ship.latDec && ship.lngDec) {
+      const m = L.map(mapEl, {
+        attributionControl:false, zoomControl:false,
+        scrollWheelZoom:false, dragging:true,
+        doubleClickZoom:true
+      });
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:12}).addTo(m);
+      const icon = L.divIcon({
+        html:`<div style="font-size:22px;filter:drop-shadow(0 2px 8px rgba(0,0,0,.9))">${ship.type==='sea'?'⛵':'⚓'}</div>`,
+        iconSize:[28,28],iconAnchor:[14,14],className:''
+      });
+      L.marker([ship.latDec, ship.lngDec],{icon}).addTo(m)
+        .bindPopup(`<b>${ship.name}</b>`);
+
+      if (ship.type==='sea') {
+        // Draw route from last3
+        const pts = ship.last3.filter(d=>d.lat).map(d => {
+          const c = parseCoords(d.lat, d.lng);
+          return [c.latDec, c.lngDec];
+        });
+        if (pts.length > 1) {
+          L.polyline(pts, {color:ship.color, weight:2.5, opacity:.8}).addTo(m);
+        }
+      }
+      m.setView([ship.latDec, ship.lngDec], ship.type==='sea'?5:8);
+      ship.mapInst = m;
+    }
+    // Init trend chart
+    initTrendChart(ship);
+  }, 200);
+}
+
+// ─── SEA render ───────────────────────────────────────
+function renderSea(s) {
+  const pct = s.pct||0;
+  const speed = s.speed ? (String(s.speed).includes('=')?'—':parseFloat(s.speed).toFixed(2)+' kts') : '—';
+  const rpm   = s.rpm   ? (String(s.rpm).includes('=')?'—':parseFloat(s.rpm).toFixed(1)) : '—';
+  const distStr = s.totalDist ? `${Math.round(s.distMade)}/${Math.round(s.totalDist)} nm` : '—';
+  const etaStr = s.eta ? String(s.eta).replace(/\s*LT$/,'') : '—';
+  const days   = s.daysLeft !== null ? s.daysLeft : '—';
+  const robFO  = s.robLsfo ? (String(s.robLsfo).includes('=')?'—':parseFloat(s.robLsfo).toFixed(1)+' MT') : '—';
+  const robDO  = s.robLsdo ? (String(s.robLsdo).includes('=')?'—':parseFloat(s.robLsdo).toFixed(1)+' MT') : '—';
+  const robFOmax = s.robLsfo ? parseFloat(s.robLsfo)||0 : 0;
+  const robDOmax = s.robLsdo ? parseFloat(s.robLsdo)||0 : 0;
+  const foBarW = Math.min(100,Math.round(robFOmax/350*100));
+  const doBarW = Math.min(100,Math.round(robDOmax/250*100));
+
+  const rows3 = s.last3.map((d,i) => {
+    const isT = i===s.last3.length-1;
+    const spd  = d.spd  && !String(d.spd).includes('=')  ? parseFloat(d.spd).toFixed(2)  : '—';
+    const rpm  = d.rpm  && !String(d.rpm).includes('=')  ? parseFloat(d.rpm).toFixed(1)  : '—';
+    const slip = d.slip && !String(d.slip).includes('=') ? parseFloat(d.slip).toFixed(1) : '—';
+    const fo   = d.lsfo && !String(d.lsfo).includes('=') ? parseFloat(d.lsfo).toFixed(1) : '—';
+    const eta  = d.etaPort ? String(d.etaPort).split(' ')[0] : '—';
+    const slipColor = slip!=='—' ? (parseFloat(slip)>30?'#ff1744':parseFloat(slip)>20?'#ffab00':'#00e676') : 'inherit';
+    return `<tr class="${isT?'td':''}">
+      <td><b style="color:${isT?'#82b1ff':'inherit'}">${formatDate(d.date)}${isT?' ★':''}</b></td>
+      <td>${d.dist&&!String(d.dist).includes('=')?Math.round(parseFloat(d.dist)):d.dist||'—'}</td>
+      <td style="color:${isT?'#69f0ae':'inherit'}">${spd}</td>
+      <td>${rpm}</td>
+      <td style="color:${slipColor};font-weight:600">${slip}${slip!=='—'?'%':''}</td>
+      <td>${fo}</td>
+      <td><span class="wb">${d.wind||'—'}</span></td>
+      <td style="color:${isT?'#69f0ae':'inherit'}">${eta}</td>
+    </tr>`;
+  }).join('');
+
+  const remHtml = s.last3.map((d,i) => {
+    const isT = i===s.last3.length-1;
+    const rem = String(d.remarks||'').split('.')[0];
+    if (!rem) return '';
+    return `<div class="rem" style="border-left-color:${isT?'var(--cyan)':'var(--blue)'}">
+      <div class="rem-d" style="color:${isT?'var(--cyan)':'var(--blue)'}">${formatDate(d.date)}${isT?' ★ TODAY':''}</div>
+      ${rem.trim()}
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="blk">
+      <div class="vc-top">
+        <div><div class="vc-name">⛵ ${s.name}</div><div class="vc-sub">VOY ${s.voy} · ${s.cargo}</div></div>
+        <span class="pill p-sea">AT SEA</span>
+      </div>
+      <div class="vp-hdr">
+        <span>${s.from}</span>
+        <span style="color:var(--cyan)">${distStr} · ${pct}%</span>
+        <span>${s.to}</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill bf-route" style="width:${pct}%"></div>
+        <div class="bar-ship" style="left:${Math.min(pct,97)}%">🚢</div>
+      </div>
+    </div>
+
+    <div class="eta-box eta-blue">
+      <div>
+        <div class="eta-lbl">📍 ETA Next Port</div>
+        <div class="eta-date">${etaStr}</div>
+        <div class="eta-port">🛳 ${s.to}</div>
+      </div>
+      <div style="text-align:center">
+        <div class="days-big" style="color:#60a5fa">${days}</div>
+        <div class="days-lbl">GÜN KALDI</div>
+      </div>
+    </div>
+
+    <div class="ig">
+      <div class="ic full"><div class="ic-l">📡 Son Noon Pozisyon</div><div class="ic-v" style="color:var(--cyan);font-size:12px">${s.posStr}</div></div>
+      <div class="ic"><div class="ic-l">Hız</div><div class="ic-v" style="color:#60a5fa">${speed}</div></div>
+      <div class="ic"><div class="ic-l">RPM</div><div class="ic-v">${rpm}</div></div>
+      <div class="ic"><div class="ic-l">Kargo</div><div class="ic-v" style="font-size:11px">${s.cargo}</div></div>
+      <div class="ic"><div class="ic-l">Charterer</div><div class="ic-v" style="font-size:11px">${s.charterer}</div></div>
+    </div>
+
+    <div class="st">🗺️ Gemi Konumu</div>
+    <div class="mini-map" id="minimap-${s.id}"></div>
+
+    <div class="st">⛽ Bunker ROB</div>
+    <div>
+      <div class="brow"><span class="blbl">LSFO</span><div class="btr"><div class="bfi bf-fo" style="width:${foBarW}%"></div></div><span class="bval">${robFO}</span></div>
+      <div class="brow"><span class="blbl">LSDO</span><div class="btr"><div class="bfi bf-do" style="width:${doBarW}%"></div></div><span class="bval">${robDO}</span></div>
+    </div>
+
+    <div class="st">📋 Son 3 Gün</div>
+    <div class="tscroll"><table class="dt">
+      <thead><tr><th>Tarih</th><th>nm</th><th>Hız</th><th>RPM</th><th>Slip</th><th>LSFO</th><th>Rzg.</th><th>ETA</th></tr></thead>
+      <tbody>${rows3}</tbody>
+    </table></div>
+
+    ${remHtml ? `<div class="st">📝 Günlük Notlar</div>${remHtml}` : ''}
+
+    <div class="st">📈 Hız / RPM / Slip</div>
+    <div class="trend-wrap">
+      <div class="trend-legend">
+        <span><span class="tl-dot" style="background:#2979ff"></span>Hız (kts)</span>
+        <span><span class="tl-dot" style="background:#00e5ff"></span>RPM</span>
+        <span><span class="tl-dot" style="background:#ffab00"></span>Slip (%)</span>
+      </div>
+      <canvas id="trend-sea-perf-${s.id}" height="130"></canvas>
+    </div>
+
+    <div class="st">⛽ LSFO Tüketim / ROB</div>
+    <div class="trend-wrap">
+      <div class="trend-legend">
+        <span><span class="tl-dot" style="background:#2979ff"></span>LSFO Tük.</span>
+        <span><span class="tl-dot" style="background:#00e676"></span>ROB LSFO</span>
+      </div>
+      <canvas id="trend-sea-lsfo-${s.id}" height="120"></canvas>
+    </div>
+
+    <div class="st">🛢️ Silindir Yağı</div>
+    <div class="trend-wrap">
+      <div class="trend-legend">
+        <span><span class="tl-dot" style="background:#d500f9"></span>Cyl Tük.</span>
+        <span><span class="tl-dot" style="background:#ff1744"></span>Cyl ROB</span>
+      </div>
+      <canvas id="trend-sea-cyl-${s.id}" height="120"></canvas>
+    </div>
+
+  `;
+}
+
+// ─── PORT render ──────────────────────────────────────
+function renderPort(s) {
+  const subIco  = s.subType==='anchor'?'⚓':s.subType==='departed'?'🚀':'🏁';
+  const subLbl  = s.subType==='anchor'?'AT ANCHOR':s.subType==='departed'?'DEPARTED':'BERTHED';
+  const pillCls = s.subType==='anchor'?'p-anc':s.subType==='departed'?'p-dock':'p-port';
+  const etaCls  = s.subType==='anchor'?'eta-amber':s.subType==='departed'?'eta-purple':'eta-green';
+  const daysCol = s.subType==='anchor'?'#fbbf24':'#34d399';
+
+  const robFOmax = s.robLsfo ? parseFloat(String(s.robLsfo).replace(/,/g,''))||0 : 0;
+  const robDOmax = s.robLsdo ? parseFloat(String(s.robLsdo).replace(/,/g,''))||0 : 0;
+  const foBarW = Math.min(100,Math.round(robFOmax/1500*100));
+  const doBarW = Math.min(100,Math.round(robDOmax/250*100));
+  const robFOstr = robFOmax ? robFOmax.toFixed(2)+' MT' : '—';
+  const robDOstr = robDOmax ? robDOmax.toFixed(2)+' MT' : '—';
+
+  // Cargo block — compute pct if missing
+  const _cargoDone  = s.cargoDone  || 0;
+  const _cargoTotal = s.cargoTotal || 0;
+  const _cargoPct   = s.cargoPct   || (_cargoTotal>0 ? Math.round(_cargoDone/_cargoTotal*100) : 0);
+  const cargoPct = _cargoPct;
+  const cargoBlock = (_cargoDone > 100) ? `
+    <div class="blk" style="margin-bottom:0">
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+        <div class="cargo-pct">${_cargoPct}%</div>
+        <div style="font-size:11px;color:var(--muted)">Yük Operasyonu</div>
+      </div>
+      <div class="bar-track" style="height:10px"><div class="bar-fill bf-cargo" style="width:${cargoPct}%"></div></div>
+      <div style="font-size:10px;color:var(--muted);text-align:right;margin-top:4px">
+        ${Number(_cargoDone).toLocaleString('tr-TR')} / ${_cargoTotal?Number(_cargoTotal).toLocaleString('tr-TR'):'?'} MT
+      </div>
+    </div>` : '';
+
+  // Timeline
+  const tlRows = [
+    ['EOSP',           s.ops['EOSP']],
+    ['NOR Tendered',   s.ops['NOR TENDERED']],
+    ['Demir Atma',     s.ops['ANCHR']],
+    ['POB',            s.ops['POB']],
+    ['All Fast',       s.ops['ALL FAST']||s.ops['BERTHING']],
+    ['Yükleme Başl.',  s.ops['COMM LDNG']],
+    ['Yükleme Bit.',   s.ops['COMP LDNG']],
+    ['Demir Kalkış',   s.ops['ANCHOR UP']],
+    ['COSP',           s.ops['COSP']],
+  ].filter(([,v])=>v&&v.date).map(([l,v],i,arr) => {
+    const isLast = i===arr.length-1;
+    const color = isLast ? '#34d399' : (String(l).includes('Demir')||l==='COSP'?'var(--amber)':'inherit');
+    return `<div class="tl-row">
+      <span class="tl-l">${l}</span>
+      <span class="tl-v" style="color:${color}">${v.date} · ${v.time||''}</span>
+    </div>`;
+  }).join('');
+
+  // Daily rows
+  const rows3 = s.last3.map((d,i) => {
+    const isT = i===s.last3.length-1;
+    return `<tr class="${isT?'td':''}">
+      <td><b style="color:${isT?'#34d399':'inherit'}">${formatDate(d.date)}${isT?' ★':''}</b></td>
+      <td>${d.daily!=null?Number(String(d.daily).replace(/,/g,'')).toLocaleString('tr-TR'):'—'}</td>
+      <td>${d.total!=null?Number(String(d.total).replace(/,/g,'')).toLocaleString('tr-TR'):'—'}</td>
+      <td style="color:${isT?'#34d399':'inherit'}">${d.ets||'—'}</td>
+      <td>${d.lsfo!=null?parseFloat(d.lsfo).toFixed(2):'—'}</td>
+      <td style="color:${isT?'#60a5fa':'inherit'}">${d.robLsfo!=null?parseFloat(d.robLsfo).toFixed(2):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const anchorBlock = s.anchorDays ? `
+    <div class="eta-box ${etaCls}">
+      <div>
+        <div class="eta-lbl">${subIco} ${subLbl}</div>
+        <div class="eta-date" style="color:${daysCol}">${s.ops['ANCHR']?.date||'—'}</div>
+        <div class="eta-port">${s.port}</div>
+      </div>
+      <div style="text-align:center">
+        <div class="days-big" style="color:${daysCol}">${s.anchorDays}</div>
+        <div class="days-lbl">GÜN DEMİRDE</div>
+      </div>
+    </div>` : `
+    <div class="eta-box ${etaCls}">
+      <div>
+        <div class="eta-lbl">${subIco} ETS — Kalkış</div>
+        <div class="eta-date" style="color:${daysCol}">${s.ets||'—'}</div>
+        <div class="eta-port">${s.port}</div>
+      </div>
+      <div style="text-align:center">
+        <div class="days-big" style="color:${daysCol}">${s.daysLeft||'—'}</div>
+        <div class="days-lbl">GÜN KALDI</div>
+      </div>
+    </div>`;
+
+  return `
+    ${cargoBlock}
+
+    <div class="blk" style="${cargoBlock?'':''}">
+      <div class="vc-top">
+        <div><div class="vc-name">${subIco} ${s.name}</div><div class="vc-sub">VOY ${s.voy} · ${s.cargo}</div></div>
+        <span class="pill ${pillCls}">${subLbl}</span>
+      </div>
+    </div>
+
+    ${anchorBlock}
+
+    <div class="ig">
+      <div class="ic"><div class="ic-l">Liman</div><div class="ic-v" style="font-size:11px">${s.port}</div></div>
+      <div class="ic"><div class="ic-l">Charterer</div><div class="ic-v" style="font-size:11px">${s.charterer}</div></div>
+      <div class="ic"><div class="ic-l">Draft F/A</div><div class="ic-v">${s.draftF||'—'} / ${s.draftA||'—'}</div></div>
+      <div class="ic"><div class="ic-l">Voy No</div><div class="ic-v">${s.voy}</div></div>
+    </div>
+
+    <div class="st">🗺️ Liman Konumu</div>
+    <div class="mini-map" id="minimap-${s.id}"></div>
+
+    ${tlRows ? `<div class="st">⏱️ Operasyon Kronolojisi</div><div class="tl">${tlRows}</div>` : ''}
+
+    <div class="st">⛽ Bunker ROB</div>
+    <div>
+      <div class="brow"><span class="blbl">LSFO</span><div class="btr"><div class="bfi bf-fo" style="width:${foBarW}%"></div></div><span class="bval">${robFOstr}</span></div>
+      <div class="brow"><span class="blbl">LSDO</span><div class="btr"><div class="bfi bf-do" style="width:${doBarW}%"></div></div><span class="bval">${robDOstr}</span></div>
+    </div>
+
+    ${rows3 ? `<div class="st">📋 Son 3 Gün</div>
+    <div class="tscroll"><table class="dt">
+      <thead><tr><th>Tarih</th><th>Günlük MT</th><th>Toplam MT</th><th>ETS</th><th>LSFO</th><th>ROB</th></tr></thead>
+      <tbody>${rows3}</tbody>
+    </table></div>` : ''}
+
+    <div class="st">⛽ LSFO Tüketim / ROB</div>
+    <div class="trend-wrap">
+      <div class="trend-legend">
+        <span><span class="tl-dot" style="background:#2979ff"></span>Günlük LSFO</span>
+        <span><span class="tl-dot" style="background:#00e676"></span>ROB LSFO</span>
+      </div>
+      <canvas id="trend-port-lsfo-${s.id}" height="130"></canvas>
+    </div>
+
+  `;
+}
+
+// ─── FLEET MAP ────────────────────────────────────────
+let currentBaseLayer = null;
+
+const LAYERS = {
+  dark:  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:18}),
+  sat:   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:18}),
+  osm:   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}),
+  wind:  L.tileLayer('https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',{maxZoom:18,opacity:.8}),
+  cloud: L.tileLayer('https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',{maxZoom:18,opacity:.8}),
+  temp:  L.tileLayer('https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=9de243494c0b295cca9337e1e96b00e2',{maxZoom:18,opacity:.8}),
+};
+
+// Dark base always shown under weather layers
+const darkBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:18});
+
+function setLayer(name) {
+  if (!fleetMap) return;
+  document.querySelectorAll('.layer-btn').forEach(b=>b.classList.remove('active'));
+  const btn = document.querySelector(`[onclick="setLayer('${name}')"]`);
+  if (btn) btn.classList.add('active');
+
+  // Remove current overlay
+  if (currentBaseLayer) fleetMap.removeLayer(currentBaseLayer);
+
+  const isWeather = ['wind','cloud','temp'].includes(name);
+  if (isWeather) {
+    if (!fleetMap.hasLayer(darkBase)) darkBase.addTo(fleetMap);
+    currentBaseLayer = LAYERS[name].addTo(fleetMap);
+  } else {
+    if (fleetMap.hasLayer(darkBase)) fleetMap.removeLayer(darkBase);
+    currentBaseLayer = LAYERS[name].addTo(fleetMap);
+  }
+}
+
+function initFleetMap() {
+  fleetMapInited = true;
+  fleetMap = L.map('fleetMap', {attributionControl:true, zoomControl:true});
+  currentBaseLayer = LAYERS.dark.addTo(fleetMap);
+  fleetMap.setView([20,60],3);
+  renderFleetMapMarkers();
+}
+
+function renderFleetMapMarkers() {
+  if (!fleetMap) return;
+  // Clear existing layers except tile
+  fleetMap.eachLayer(l => { if (l instanceof L.Marker || l instanceof L.Polyline || l instanceof L.CircleMarker || l instanceof L.LayerGroup) fleetMap.removeLayer(l); });
+  if (!ships.length) return;
+
+  const bounds = [];
+
+  ships.forEach(s => {
+    if (!s.latDec || !s.lngDec) return;
+    bounds.push([s.latDec, s.lngDec]);
+
+    // Route line for sea ships
+    if (s.type === 'sea' && s.last3) {
+      const pts = s.last3.filter(d=>d.lat).map(d => {
+        const c = parseCoords(d.lat, d.lng);
+        return [c.latDec, c.lngDec];
+      }).filter(p=>p[0]&&p[1]);
+      if (pts.length>1) {
+        L.polyline(pts,{color:s.color,weight:3,opacity:.8}).addTo(fleetMap);
+      }
+    }
+
+    const ico = s.type==='sea'?'⛵':'⚓';
+    const icon = L.divIcon({
+      html:`<div style="font-size:28px;filter:drop-shadow(0 3px 10px rgba(0,0,0,.95));line-height:1">${ico}</div>`,
+      iconSize:[34,34],iconAnchor:[17,17],className:''
+    });
+
+    let popContent = `<div style="min-width:200px;font-size:12px;font-family:sans-serif">
+      <b style="font-size:14px">${s.name}</b><br>
+      <span style="background:${s.color}33;color:${s.color};padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700">${s.type==='sea'?'AT SEA':s.subType?.toUpperCase()||'IN PORT'}</span>
+      <div style="margin-top:8px;color:#94a3b8;line-height:1.6">`;
+    if (s.type==='sea') {
+      popContent += `<b>Rota:</b> ${s.from} → ${s.to}<br>
+        <b>Pozisyon:</b> ${s.posStr}<br>
+        <b>ETA:</b> ${s.eta||'—'} (${s.daysLeft||'—'} gün)<br>
+        <b>Hız:</b> ${s.speed&&!String(s.speed).includes('=')?parseFloat(s.speed).toFixed(2)+' kts':'—'}<br>
+        <b>ROB LSFO:</b> ${s.robLsfo&&!String(s.robLsfo).includes('=')?parseFloat(s.robLsfo).toFixed(1)+' MT':'—'}`;
+    } else {
+      popContent += `<b>Liman:</b> ${s.port}<br>
+        <b>Kargo:</b> ${s.cargo}<br>
+        <b>ROB LSFO:</b> ${s.robLsfo?parseFloat(String(s.robLsfo).replace(/,/g,'')).toFixed(1)+' MT':'—'}<br>
+        ${s.cargoPct ? '<b>Yük:</b> '+s.cargoPct+'%<br>' : ''}
+        ${s.anchorDays ? '<b>Demir:</b> '+s.anchorDays+' gün' : '<b>ETS:</b> '+(s.ets||'—')}`;
+    }
+    popContent += `</div></div>`;
+
+    L.marker([s.latDec, s.lngDec],{icon})
+      .addTo(fleetMap)
+      .bindPopup(popContent, {maxWidth:260});
+  });
+
+  // Update legend
+  const leg = document.getElementById('fleetLegend');
+  leg.innerHTML = ships.map(s=>`
+    <div class="leg-item">
+      <div class="leg-dot" style="background:${s.color}"></div>
+      <span>${s.type==='sea'?'⛵':'⚓'} ${s.name}</span>
+    </div>`).join('');
+
+  if (bounds.length === 1) {
+    fleetMap.setView(bounds[0], 6);
+  } else if (bounds.length > 1) {
+    fleetMap.fitBounds(L.latLngBounds(bounds).pad(0.15));
+  }
+}
+
+function updateFleetMap() {
+  if (fleetMapInited && fleetMap) renderFleetMapMarkers();
+}
+
+// ─── Helpers ──────────────────────────────────────────
+function formatDate(d) {
+  if (!d) return '—';
+  const s = String(d);
+  const m = s.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  if (m) return `${m[1]} ${['','Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'][parseInt(m[2])]}`;
+  return s.slice(0,8);
+}
+
+// ─── Theme toggle ─────────────────────────────────────
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light');
+  document.getElementById('themeBtn').textContent = isLight ? '🌞' : '🌙';
+  // Reload map tiles on theme change
+  if (fleetMapInited && fleetMap) {
+    const name = document.querySelector('.layer-btn.active')?.getAttribute('onclick')?.match(/setLayer\('(\w+)'\)/)?.[1] || 'dark';
+    setLayer(name);
+  }
+}
+
+// ─── Print ────────────────────────────────────────────
+function doPrint() {
+  document.getElementById('fleetPanel').classList.remove('hidden');
+  document.getElementById('fleetMapPanel').classList.remove('active');
+  document.getElementById('segFleet').classList.add('active');
+  document.getElementById('segMap').classList.remove('active');
+  document.body.setAttribute('data-date', new Date().toLocaleDateString('tr-TR',{day:'2-digit',month:'long',year:'numeric'}).toUpperCase());
+  ships.forEach(s => { if (s.mapInst) s.mapInst.invalidateSize(); });
+  setTimeout(() => window.print(), 350);
+}
+
+// ─── Fullscreen map ───────────────────────────────────
+function toggleFullscreen() {
+  const mapEl = document.getElementById('fleetMap');
+  const btn = document.getElementById('fsBtn');
+  if (mapEl.classList.toggle('fullscreen')) {
+    btn.textContent = '✕';
+    document.addEventListener('keydown', _fsEsc);
+  } else {
+    btn.textContent = '⛶';
+    document.removeEventListener('keydown', _fsEsc);
+  }
+  setTimeout(() => { if (fleetMap) fleetMap.invalidateSize(); }, 100);
+}
+function _fsEsc(e) { if (e.key === 'Escape') toggleFullscreen(); }
+
+// ─── Drag & drop global ───────────────────────────────
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  const files = Array.from(e.dataTransfer.files).filter(f=>f.name.match(/\.xlsx?$/i));
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const wb = XLSX.read(ev.target.result,{type:'binary'});
+        addShip(parseWorkbook(wb, file.name));
+      } catch(err){ alert('Hata: '+err.message); }
+    };
+    reader.readAsBinaryString(file);
+  });
+});
+
+// ─── Pre-load demo data ───────────────────────────────
+
+// ─── AUTO-GENERATED DATA (29.03.2026) ─────────────────────
+const BOOT_SHIPS = [
+  {
+    "type": "port",
+    "subType": "berthed",
+    "name": "OCEAN DIAMOND",
+    "port": "KEMAMAN",
+    "voy": "68",
+    "cargo": "HOT ROLLED STEEL COIL",
+    "charterer": "PACIFIC BASIN",
+    "robLsfo": 1003.52,
+    "robLsdo": 204.42,
+    "draftF": "4.38",
+    "draftA": "ARRIVAL DRAUGHTS (M)",
+    "cargoTotal": null,
+    "cargoDone": 1891.0,
+    "cargoPct": null,
+    "ets": "TBC",
+    "daysLeft": "—",
+    "anchorDays": 6,
+    "latDec": 4.24,
+    "lngDec": 103.43,
+    "posStr": "KEMAMAN",
+    "ops": {
+      "EOSP": {
+        "date": "22.03.2026",
+        "time": "2330"
+      },
+      "NOR TENDERED": {
+        "date": "23.03.2026",
+        "time": "0045"
+      },
+      "ANCHR": {
+        "date": "23.03.2026",
+        "time": "0045"
+      },
+      "ANCHOR UP": {
+        "date": "",
+        "time": ""
+      },
+      "POB": {
+        "date": "",
+        "time": ""
+      },
+      "ALL FAST": {
+        "date": "28.03.2026",
+        "time": "0820"
+      },
+      "BERTHING": {
+        "date": "28.03.2026",
+        "time": "0820"
+      },
+      "COMM LDNG": {
+        "date": "",
+        "time": ""
+      },
+      "COMP LDNG": {
+        "date": "",
+        "time": ""
+      },
+      "DLOSP": {
+        "date": "",
+        "time": ""
+      },
+      "COSP": {
+        "date": "",
+        "time": ""
+      }
+    },
+    "last3": [
+      {
+        "date": "23.03.2026",
+        "daily": null,
+        "total": null,
+        "ets": "TBC",
+        "lsfo": 1.25,
+        "lsdo": 0.0,
+        "robLsfo": 1021.7,
+        "robLsdo": 204.42,
+        "fw": 1.0
+      },
+      {
+        "date": "24.03.2026",
+        "daily": null,
+        "total": null,
+        "ets": "TBC",
+        "lsfo": 2.7,
+        "lsdo": 0.1,
+        "robLsfo": 1019.0,
+        "robLsdo": 204.32,
+        "fw": 7.0
+      },
+      {
+        "date": "25.03.2026",
+        "daily": null,
+        "total": null,
+        "ets": "TBC",
+        "lsfo": 2.5,
+        "lsdo": 0.0,
+        "robLsfo": 1016.5,
+        "robLsdo": 204.32,
+        "fw": 3.0
+      },
+      {
+        "date": "26.03.2026",
+        "daily": null,
+        "total": null,
+        "ets": "TBC",
+        "lsfo": 2.7,
+        "lsdo": 0.1,
+        "robLsfo": 1013.8,
+        "robLsdo": 204.22,
+        "fw": 6.0
+      },
+      {
+        "date": "27.03.2026",
+        "daily": null,
+        "total": null,
+        "ets": "28.03.2026",
+        "lsfo": 2.5,
+        "lsdo": 0.1,
+        "robLsfo": 1011.3,
+        "robLsdo": 204.12,
+        "fw": 6.0
+      },
+      {
+        "date": "28.03.2026",
+        "daily": 0.0,
+        "total": 0.0,
+        "ets": "TBC",
+        "lsfo": 3.78,
+        "lsdo": 0.0,
+        "robLsfo": 1007.52,
+        "robLsdo": 204.12,
+        "fw": 6.0
+      },
+      {
+        "date": "29.03.2026",
+        "daily": 1891.0,
+        "total": 1891.0,
+        "ets": "TBC",
+        "lsfo": 4.0,
+        "lsdo": 0.1,
+        "robLsfo": 1003.52,
+        "robLsdo": 204.02,
+        "fw": 5.0
+      }
+    ],
+    "id": 1,
+    "_ageHours": -5.7,
+    "_isStale": false
+  },
+  {
+    "type": "port",
+    "subType": "berthed",
+    "name": "MV OCEAN FREEDOM",
+    "port": "IMBITUBA, BRAZIL",
+    "voy": "01/2026",
+    "cargo": "COAL",
+    "charterer": "PACIFIC BASIN / GENCO SHIPPING",
+    "robLsfo": 649.942,
+    "robLsdo": 202.518,
+    "draftF": "ARRIVAL DRAUGHTS (M)",
+    "draftA": "ARRIVAL DRAUGHTS (M)",
+    "cargoTotal": 53900.0,
+    "cargoDone": 48404.0,
+    "cargoPct": 90,
+    "ets": "29.03.2026",
+    "daysLeft": "0.0",
+    "anchorDays": null,
+    "latDec": -28.23,
+    "lngDec": -48.66,
+    "posStr": "IMBITUBA, BRAZIL",
+    "ops": {
+      "EOSP": {
+        "date": "23.03.2026",
+        "time": "13:30"
+      },
+      "NOR TENDERED": {
+        "date": "23.03.2026",
+        "time": "14:00"
+      },
+      "ANCHR": {
+        "date": "",
+        "time": ""
+      },
+      "ANCHOR UP": {
+        "date": "",
+        "time": ""
+      },
+      "POB": {
+        "date": "",
+        "time": ""
+      },
+      "ALL FAST": {
+        "date": "23.03.2026",
+        "time": "17:30"
+      },
+      "BERTHING": {
+        "date": "23.03.2026",
+        "time": "17:30"
+      },
+      "COMM LDNG": {
+        "date": "23.03.2026",
+        "time": "20:00"
+      },
+      "COMP LDNG": {
+        "date": "",
+        "time": ""
+      },
+      "DLOSP": {
+        "date": "",
+        "time": ""
+      },
+      "COSP": {
+        "date": "",
+        "time": ""
+      }
+    },
+    "last3": [
+      {
+        "date": "24.03.2026",
+        "daily": 7235.0,
+        "total": 7235.0,
+        "ets": "29.03.2026",
+        "lsfo": 2.389,
+        "lsdo": 0.0,
+        "robLsfo": 662.12,
+        "robLsdo": 202.518,
+        "fw": 5.0
+      },
+      {
+        "date": "25.03.2026",
+        "daily": 12567.0,
+        "total": 19802.0,
+        "ets": "29.03.2026",
+        "lsfo": 3.1,
+        "lsdo": 0.0,
+        "robLsfo": 659.02,
+        "robLsdo": 202.518,
+        "fw": 8.0
+      },
+      {
+        "date": "26.03.2026",
+        "daily": 9628.0,
+        "total": 29430.0,
+        "ets": "29.03.2026",
+        "lsfo": 3.1,
+        "lsdo": 0.0,
+        "robLsfo": 655.92,
+        "robLsdo": 202.518,
+        "fw": 7.0
+      },
+      {
+        "date": "27.03.2026",
+        "daily": 11237.0,
+        "total": 40667.0,
+        "ets": "29.03.2026",
+        "lsfo": 3.095,
+        "lsdo": 0.0,
+        "robLsfo": 653.042,
+        "robLsdo": 203.003,
+        "fw": 7.0
+      },
+      {
+        "date": "28.03.2026",
+        "daily": 7737.0,
+        "total": 48404.0,
+        "ets": "29.03.2026",
+        "lsfo": 3.1,
+        "lsdo": 0.0,
+        "robLsfo": 649.942,
+        "robLsdo": 203.003,
+        "fw": 6.0
+      }
+    ],
+    "id": 2,
+    "_ageHours": 18.3,
+    "_isStale": false
+  },
+  {
+    "type": "sea",
+    "subType": "sea",
+    "name": "OCEAN DESTINY",
+    "from": "COLOMBO, SRI LANKA",
+    "to": "SINGAPORE",
+    "voy": "02/26",
+    "cargo": "IRON ORE FINES",
+    "charterer": "FALCON",
+    "cosp": "25.03.2026 1015LT",
+    "eta": "01.04.2026",
+    "daysLeft": "3.0",
+    "distMade": 716,
+    "totalDist": 2322,
+    "pct": 31,
+    "posStr": "06 16.3N / 090 55.1E",
+    "latDec": 6.2717,
+    "lngDec": 90.9183,
+    "speed": "10.26086956521739",
+    "rpm": "89.1",
+    "slip": "22.6",
+    "robLsfo": 113.08000000000001,
+    "robLsdo": 64.39999999999999,
+    "draftF": "—",
+    "draftM": "—",
+    "draftA": "—",
+    "last3": [
+      {
+        "date": "25.03.2026",
+        "lat": "06 30.8N",
+        "lng": "079 41.2E",
+        "dist": null,
+        "hrs": null,
+        "min": null,
+        "spd": null,
+        "rpm": null,
+        "slip": null,
+        "lsfo": null,
+        "lsdo": null,
+        "robLsfo": 183.32,
+        "robLsdo": 65.2,
+        "wind": "—",
+        "etaPort": "31.03.2026",
+        "remarks": "1.42",
+        "cylCons": null,
+        "cylROB": 7598.0,
+        "sysCons": null
+      },
+      {
+        "date": "25.03.2026",
+        "lat": "06 30.8N",
+        "lng": "079 41.2E",
+        "dist": 19.0,
+        "hrs": 1.0,
+        "min": 45.0,
+        "spd": 10.857142857142858,
+        "rpm": 91.9,
+        "slip": 17.2,
+        "lsfo": 1.64,
+        "lsdo": 0.2,
+        "robLsfo": 181.68,
+        "robLsdo": 65.0,
+        "wind": "S 4",
+        "etaPort": "31.03.2026",
+        "remarks": "1.75",
+        "cylCons": 10.0,
+        "cylROB": 7588.0,
+        "sysCons": 0.0
+      },
+      {
+        "date": "26.03.2026",
+        "lat": "05 49.7N",
+        "lng": "083 02.4E",
+        "dist": 226.0,
+        "hrs": 23.0,
+        "min": 30.0,
+        "spd": 9.617021276595745,
+        "rpm": 92.3,
+        "slip": 27.0,
+        "lsfo": 22.6,
+        "lsdo": 0.2,
+        "robLsfo": 159.08,
+        "robLsdo": 64.8,
+        "wind": "ENE 4",
+        "etaPort": "01.04.2026",
+        "remarks": "23.5",
+        "cylCons": 142.0,
+        "cylROB": 7446.0,
+        "sysCons": 0.0
+      },
+      {
+        "date": "27.03.2026",
+        "lat": "06 02.9N",
+        "lng": "086 57.9E",
+        "dist": 235.0,
+        "hrs": 24.0,
+        "min": 0.0,
+        "spd": 9.791666666666666,
+        "rpm": 94.1,
+        "slip": 27.1,
+        "lsfo": 23.6,
+        "lsdo": 0.2,
+        "robLsfo": 135.48000000000002,
+        "robLsdo": 64.6,
+        "wind": "NE 4",
+        "etaPort": "01.04.2026",
+        "remarks": "COLOMBO TO SINGAPORE. SE'LY 2 MTR SWELL. 1.0 KTS ADVERSE CURRENT.",
+        "cylCons": 147.0,
+        "cylROB": 7299.0,
+        "sysCons": 0.0
+      },
+      {
+        "date": "28.03.2026",
+        "lat": "06 16.3N",
+        "lng": "090 55.1E",
+        "dist": 236.0,
+        "hrs": 23.0,
+        "min": 0.0,
+        "spd": 10.26086956521739,
+        "rpm": 89.1,
+        "slip": 22.6,
+        "lsfo": 22.4,
+        "lsdo": 0.2,
+        "robLsfo": 113.08000000000001,
+        "robLsdo": 64.39999999999999,
+        "wind": "NE 4",
+        "etaPort": "01.04.2026",
+        "remarks": "COLOMBO TO SINGAPORE. SE'LY 2 MTR SWELL. 0.6 KTS ADVERSE CURRENT.",
+        "cylCons": 143.0,
+        "cylROB": 7156.0,
+        "sysCons": 1500.0
+      }
+    ],
+    "route": [],
+    "id": 3,
+    "_ageHours": 18.3,
+    "_isStale": false
+  }
+];
+BOOT_SHIPS.forEach((s, i) => {
+  s.color = COLORS[i % COLORS.length];
+  addShip(s);
+});
+
+</script>
+</body>
+</html>
